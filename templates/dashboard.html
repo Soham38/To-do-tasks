@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard -Tasks</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="brand">Tasks</a>
+    <div class="nav-links">
+      <span style="font-size: 0.9rem; color: var(--text-muted);">{{ current_user.email }}</span>
+      <a href="/logout" class="btn btn-outline" style="padding: 6px 12px;">Sign Out</a>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+      <div>
+        <h1>My Task Lists</h1>
+        <p style="color: var(--text-muted);">Manage all your personal task lists.</p>
+      </div>
+      <button class="btn" onclick="createNewList()">+ New List</button>
+    </div>
+
+    <div class="grid-lists">
+      {% for l in user_lists %}
+      <div class="list-card">
+        <div>
+          <h3 style="margin-bottom: 8px;">{{ l.title }}</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted);">{{ l.tasks|length }} items</p>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+          <a href="/list/{{ l.id }}" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.8rem;">Open</a>
+          <button onclick="deleteList('{{ l.id }}')" style="background: none; border: none; color: var(--danger); cursor: pointer;">Delete</button>
+        </div>
+      </div>
+      {% else %}
+      <p style="color: var(--text-muted); grid-column: 1 / -1;">You don't have any lists yet. Click <strong>+ New List</strong> to start!</p>
+      {% endfor %}
+    </div>
+  </main>
+
+  <script>
+    async function createNewList() {
+      const title = prompt("Enter list name:", "My List");
+      if (title === null) return;
+      const res = await fetch('/api/lists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        window.location.href = `/list/${data.list_id}`;
+      }
+    }
+
+    async function deleteList(id) {
+      if (!confirm("Delete this list permanently?")) return;
+      const res = await fetch(`/api/lists/${id}`, { method: 'DELETE' });
+      if (res.ok) location.reload();
+    }
+  </script>
+</body>
+</html>

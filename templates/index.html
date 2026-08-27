@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple Tasks - Shareable & Fast To-Do Lists</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="brand">Simple Tasks</a>
+    <div class="nav-links">
+      <a href="/login" class="btn btn-outline" style="padding: 6px 12px;">Sign In</a>
+      <a href="/register" class="btn" style="padding: 6px 12px;">Sign Up</a>
+    </div>
+  </nav>
+
+  <main class="container" style="max-width: 800px;">
+    <!-- Hero Section -->
+    <div class="card" style="text-align: center; padding: 50px 24px; margin-bottom: 30px;">
+      <span style="background: #eef2ff; color: #4f46e5; font-size: 0.8rem; font-weight: 700; padding: 4px 12px; border-radius: 20px; text-transform: uppercase;">Zero Friction</span>
+      <h1 style="font-size: 2.5rem; font-weight: 800; margin: 16px 0 12px; letter-spacing: -0.03em;">To-do lists you can share in seconds.</h1>
+      <p style="color: var(--text-muted); font-size: 1.1rem; max-width: 520px; margin: 0 auto 28px;">No mandatory sign-ups. No complicated setup. Create a checklist instantly or create an account to manage multiple projects.</p>
+
+      <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+        <button id="create-list-btn" class="btn" style="padding: 12px 28px; font-size: 1rem;">⚡ Create Instant List</button>
+        <a href="/register" class="btn btn-outline" style="padding: 12px 24px; font-size: 1rem;">Sign Up for Free</a>
+      </div>
+    </div>
+
+    <!-- Feature Grid Section -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 40px;">
+      <div class="card" style="padding: 20px;">
+        <div style="font-size: 1.5rem; margin-bottom: 8px;">🔗</div>
+        <h3 style="font-size: 1.05rem; margin-bottom: 6px;">Shareable URLs</h3>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 0;">Unique UUID links let anyone collaborate without tedious user invites.</p>
+      </div>
+
+      <div class="card" style="padding: 20px;">
+        <div style="font-size: 1.5rem; margin-bottom: 8px;">📁</div>
+        <h3 style="font-size: 1.05rem; margin-bottom: 6px;">Multi-List Workspace</h3>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 0;">Sign in to organize multiple work, personal, and project lists in one dashboard.</p>
+      </div>
+
+      <div class="card" style="padding: 20px;">
+        <div style="font-size: 1.5rem; margin-bottom: 8px;">🔔</div>
+        <h3 style="font-size: 1.05rem; margin-bottom: 6px;">Smart Alerts & Order</h3>
+        <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 0;">Drag-and-drop reordering, due date notifications, and instant priority tagging.</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    document.getElementById('create-list-btn').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/lists', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: 'Untitled List' })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          window.location.href = `/list/${data.list_id}`;
+        }
+      } catch (error) {
+        console.error('Error creating list:', error);
+      }
+    });
+
+    // Clear recent lists if logging out
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('logout') === 'true') {
+      localStorage.removeItem('recent_lists');
+    }
+  </script>
+</body>
+</html>

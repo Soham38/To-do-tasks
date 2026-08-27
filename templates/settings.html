@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings -Tasks</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav>
+    <a href="/">Home</a>
+    <div>
+      <a href="list.html">Back to List</a>
+    </div>
+  </nav>
+
+  <main class="container">
+    <h1>Settings</h1>
+
+    <div class="card" style="margin-bottom: 20px;">
+      <h2>Account Profile</h2>
+      <p>Manage your account details and email preferences.</p>
+      <form>
+        <input type="email" value="user@example.com">
+        <input type="password" placeholder="Update Password">
+        <button type="submit" class="btn" style="width: auto;">Save Changes</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Your Saved Lists</h2>
+      <p>Lists associated with your account.</p>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <a href="list.html?id=123" style="color: var(--primary-color);">Grocery List</a>
+        <a href="list.html?id=456" style="color: var(--primary-color);">Work Tasks</a>
+        <a href="list.html?id=789" style="color: var(--primary-color);">Packing for Trip</a>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

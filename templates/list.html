@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task List</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <!-- CDN for Drag and Drop -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+</head>
+<body>
+<nav class="navbar">
+    <a href="/" class="brand">Tasks</a>
+    <div class="nav-links">
+      <select id="recent-lists-select" onchange="if(this.value) window.location.href=this.value;" style="width: auto; min-width: 140px; font-size: 0.85rem; padding: 6px 10px;">
+        <option value="">Recent Lists...</option>
+      </select>
+      {% if current_user.is_authenticated %}
+        <a href="/dashboard" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;">Dashboard</a>
+        <a href="/logout" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;">Sign Out</a>
+      {% else %}
+        <a href="/login" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.85rem;">Sign In</a>
+      {% endif %}
+    </div>
+  </nav>
+
+  <main class="container">
+    {% if not current_user.is_authenticated %}
+<div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+  <span style="font-size: 0.9rem; color: #3730a3;">
+    💡 <strong>Tip:</strong> You are using a temporary guest list. <a href="/register" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Create a free account</a> to save and organize multiple lists in one place.
+  </span>
+  <a href="/login" class="btn" style="padding: 4px 10px; font-size: 0.8rem;">Log In</a>
+</div>
+{% endif %}
+    <div class="card">
+
+      <!-- List Title (Editable) -->
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px;">
+        <h2 id="list-title" class="editable-title" contenteditable="true" spellcheck="false">Loading...</h2>
+        <div style="display: flex; gap: 6px;">
+          <button class="btn btn-outline" onclick="exportList()" title="Download as text file">Export .txt</button>
+          <button class="btn btn-danger" onclick="clearCompleted()">Clear Completed</button>
+          <button class="btn btn-outline" id="notify-btn" onclick="requestNotificationPermission()">🔔 Enable Alerts</button>
+        </div>
+      </div>
+
+      <!-- Add Task Form -->
+      <form id="add-task-form" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+        <input type="text" id="task-input" placeholder="Add a new task..." required style="flex: 1 1 200px;">
+        <select id="task-priority" style="flex: 0 0 100px;">
+          <option value="Normal">Normal</option>
+          <option value="High">High</option>
+          <option value="Low">Low</option>
+        </select>
+        <input type="date" id="task-due-date" style="flex: 0 0 135px;">
+        <button type="submit" class="btn" style="flex: 0 0 70px;">Add</button>
+      </form>
+
+      <!-- Drag & Drop Task List Container -->
+      <div id="task-container"></div>
+    </div>
+  </main>
+
+  <script>
+    const listId = "{{ list_id }}";
+    const taskContainer = document.getElementById('task-container');
+    const taskForm = document.getElementById('add-task-form');
+    const titleElem = document.getElementById('list-title');
+
+    // 1. LocalStorage: Save and populate recent lists
+    function saveRecentList(id, title) {
+      let recents = JSON.parse(localStorage.getItem('recent_lists') || '[]');
+      recents = recents.filter(item => item.id !== id);
+      recents.unshift({ id, title: title || "Untitled List" });
+      if (recents.length > 8) recents.pop();
+      localStorage.setItem('recent_lists', JSON.stringify(recents));
+      populateRecentMenu();
+    }
+
+    function populateRecentMenu() {
+      const select = document.getElementById('recent-lists-select');
+      const recents = JSON.parse(localStorage.getItem('recent_lists') || '[]');
+      select.innerHTML = '<option value="">Recent Lists...</option>';
+      recents.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = `/list/${item.id}`;
+        opt.textContent = item.title;
+        select.appendChild(opt);
+      });
+    }
+
+    // 2. Fetch list data and tasks
+    async function loadTasks() {
+      try {
+        const res = await fetch(`/api/lists/${listId}`);
+        if (!res.ok) throw new Error('Failed to load list');
+        const data = await res.json();
+
+        titleElem.textContent = data.title;
+        saveRecentList(listId, data.title);
+
+        taskContainer.innerHTML = '';
+        data.tasks.forEach(task => renderTask(task));
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // 3. Render a single task DOM element
+    function renderTask(task) {
+      const taskDiv = document.createElement('div');
+      taskDiv.className = `task-item ${task.is_completed ? 'completed' : ''}`;
+      taskDiv.dataset.id = task.id;
+
+      const dueHtml = task.due_date ? `<span class="due-badge">📅 ${task.due_date}</span>` : '';
+      const priorityHtml = `<span class="badge badge-${task.priority}">${task.priority}</span>`;
+
+      taskDiv.innerHTML = `
+        <span class="drag-handle">⠿</span>
+        <input type="checkbox" ${task.is_completed ? 'checked' : ''} onchange="toggleTask('${task.id}', this.checked)">
+        <span style="flex-grow: 1;">${task.description}</span>
+        ${dueHtml}
+        ${priorityHtml}
+        <button onclick="deleteTask('${task.id}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 0.95rem;">✕</button>
+      `;
+      taskContainer.appendChild(taskDiv);
+    }
+
+    // 4. Initialize SortableJS Drag and Drop
+    new Sortable(taskContainer, {
+      handle: '.drag-handle',
+      animation: 150,
+      onEnd: async function () {
+        const order = Array.from(taskContainer.children).map(child => child.dataset.id);
+        await fetch(`/api/lists/${listId}/reorder`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order })
+        });
+      }
+    });
+
+    // 5. Title Inline Edit Sync
+    titleElem.addEventListener('blur', async () => {
+      const newTitle = titleElem.textContent.trim() || 'Untitled List';
+      await fetch(`/api/lists/${listId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle })
+      });
+      saveRecentList(listId, newTitle);
+    });
+
+     taskForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const desc = document.getElementById('task-input').value.trim();
+  const priority = document.getElementById('task-priority').value;
+  const due = document.getElementById('task-due-date').value;
+  if (!desc) return;
+
+  const res = await fetch(`/api/lists/${listId}/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ description: desc, priority: priority, due_date: due })
+  });
+
+  if (res.ok) {
+    const newTask = await res.json();
+    renderTask(newTask);
+
+    // 👇 ADD THIS LINE HERE:
+    showNotification("New Task Added", newTask.description);
+
+    document.getElementById('task-input').value = '';
+    document.getElementById('task-due-date').value = '';
+  }
+});
+
+    // 7. Toggle Completion
+    async function toggleTask(taskId, isCompleted) {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_completed: isCompleted })
+      });
+      if (res.ok) {
+        const taskElem = document.querySelector(`[data-id="${taskId}"]`);
+        if (taskElem) taskElem.classList.toggle('completed', isCompleted);
+      }
+    }
+
+    // 8. Delete Task
+    async function deleteTask(taskId) {
+      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+      if (res.ok) {
+        const taskElem = document.querySelector(`[data-id="${taskId}"]`);
+        if (taskElem) taskElem.remove();
+      }
+    }
+
+    // 9. Clear All Completed Tasks
+    async function clearCompleted() {
+      const res = await fetch(`/api/lists/${listId}/completed`, { method: 'DELETE' });
+      if (res.ok) {
+        document.querySelectorAll('.task-item.completed').forEach(el => el.remove());
+      }
+    }
+
+    // 10. Export to Plain Text (.txt)
+    function exportList() {
+      const items = Array.from(taskContainer.children).map(item => {
+        const isDone = item.querySelector('input[type="checkbox"]').checked ? '[x]' : '[ ]';
+        const text = item.querySelector('span[style*="flex-grow"]').textContent;
+        return `${isDone} ${text}`;
+      });
+      const fileContent = `${titleElem.textContent}\n${'='.repeat(titleElem.textContent.length)}\n\n` + items.join('\n');
+      const blob = new Blob([fileContent], { type: 'text/plain' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${titleElem.textContent.toLowerCase().replace(/\s+/g, '_')}_tasks.txt`;
+      a.click();
+    }
+
+    populateRecentMenu();
+    loadTasks();
+
+
+    // 1. Request Permission from Chrome
+async function requestNotificationPermission() {
+  if (!("Notification" in window)) {
+    alert("This browser does not support desktop notifications.");
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  const btn = document.getElementById('notify-btn');
+
+  if (permission === "granted") {
+    btn.textContent = "🔔 Alerts Enabled";
+    btn.disabled = true;
+    showNotification("Notifications Active", "You'll now receive alerts for your tasks!");
+  } else {
+    alert("Notification permission denied. Enable it in Chrome site settings.");
+  }
+}
+
+// 2. Helper to display a desktop notification
+function showNotification(title, body) {
+  if (Notification.permission === "granted") {
+    new Notification(title, {
+      body: body,
+      icon: "https://cdn-icons-png.flaticon.com/512/906/906334.png" // Optional task icon
+    });
+  }
+}
+
+// 3. Check for due tasks every 60 seconds
+setInterval(() => {
+  if (Notification.permission !== "granted") return;
+
+  const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+  const tasks = document.querySelectorAll('.task-item:not(.completed)');
+
+  tasks.forEach(task => {
+    const dueBadge = task.querySelector('.due-badge');
+    const taskName = task.querySelector('span[style*="flex-grow"]').textContent;
+
+    if (dueBadge && dueBadge.textContent.includes(today)) {
+      showNotification("Task Due Today!", `Don't forget: ${taskName}`);
+    }
+  });
+}, 60000); // Checks every minute
+
+    // Check if user is logged in using Jinja2
+const isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
+
+function saveRecentList(id, title) {
+  // Only store recent lists in localStorage if the user is a guest
+  if (isAuthenticated) return;
+
+  let recents = JSON.parse(localStorage.getItem('recent_lists') || '[]');
+  recents = recents.filter(item => item.id !== id);
+  recents.unshift({ id, title: title || "Untitled List" });
+  if (recents.length > 8) recents.pop();
+  localStorage.setItem('recent_lists', JSON.stringify(recents));
+  populateRecentMenu();
+}
+  </script>
+</body>
+</html>

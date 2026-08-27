@@ -1,0 +1,23 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <list>
+          <option value="flask-bootstrap" />
+          <option value="Bootstrap_Flask" />
+          <option value="Flask_CKEditor" />
+          <option value="Flask_Login" />
+          <option value="Flask_WTF" />
+          <option value="WTForms" />
+          <option value="Werkzeug" />
+          <option value="Flask" />
+          <option value="Flask-SQLAlchemy" />
+          <option value="SQLAlchemy" />
+          <option value="gunicorn" />
+          <option value="psycopg-binary" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
