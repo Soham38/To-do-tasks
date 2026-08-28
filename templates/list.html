@@ -9,8 +9,8 @@
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
 <body>
-<nav class="navbar">
-    <a href="/" class="brand">Tasks</a>
+  <nav class="navbar">
+    <a href="/" class="brand">Simple Tasks</a>
     <div class="nav-links">
       <select id="recent-lists-select" onchange="if(this.value) window.location.href=this.value;" style="width: auto; min-width: 140px; font-size: 0.85rem; padding: 6px 10px;">
         <option value="">Recent Lists...</option>
@@ -26,19 +26,19 @@
 
   <main class="container">
     {% if not current_user.is_authenticated %}
-<div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-  <span style="font-size: 0.9rem; color: #3730a3;">
-    💡 <strong>Tip:</strong> You are using a temporary guest list. <a href="/register" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Create a free account</a> to save and organize multiple lists in one place.
-  </span>
-  <a href="/login" class="btn" style="padding: 4px 10px; font-size: 0.8rem;">Log In</a>
-</div>
-{% endif %}
-    <div class="card">
+    <div style="background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-size: 0.9rem; color: #3730a3;">
+        💡 <strong>Tip:</strong> You are using a temporary guest list. <a href="/register" style="color: #4f46e5; font-weight: 600; text-decoration: underline;">Create a free account</a> to save and organize multiple lists in one place.
+      </span>
+      <a href="/login" class="btn" style="padding: 4px 10px; font-size: 0.8rem;">Log In</a>
+    </div>
+    {% endif %}
 
+    <div class="card">
       <!-- List Title (Editable) -->
-      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px;">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
         <h2 id="list-title" class="editable-title" contenteditable="true" spellcheck="false">Loading...</h2>
-        <div style="display: flex; gap: 6px;">
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
           <button class="btn btn-outline" onclick="exportList()" title="Download as text file">Export .txt</button>
           <button class="btn btn-danger" onclick="clearCompleted()">Clear Completed</button>
           <button class="btn btn-outline" id="notify-btn" onclick="requestNotificationPermission()">🔔 Enable Alerts</button>
@@ -53,7 +53,7 @@
           <option value="High">High</option>
           <option value="Low">Low</option>
         </select>
-        <input type="date" id="task-due-date" style="flex: 0 0 135px;">
+        <input type="datetime-local" id="task-due-date" style="max-width: 220px; font-size: 0.9rem;">
         <button type="submit" class="btn" style="flex: 0 0 70px;">Add</button>
       </form>
 
@@ -64,12 +64,28 @@
 
   <script>
     const listId = "{{ list_id }}";
+    const isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
     const taskContainer = document.getElementById('task-container');
     const taskForm = document.getElementById('add-task-form');
     const titleElem = document.getElementById('list-title');
+    let loadedTasks = [];
 
-    // 1. LocalStorage: Save and populate recent lists
+    // 1. Format date and time
+    function formatDateTime(isoString) {
+      if (!isoString) return '';
+      const dt = new Date(isoString);
+      if (isNaN(dt.getTime())) return isoString;
+      return dt.toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // 2. LocalStorage for guest recent lists
     function saveRecentList(id, title) {
+      if (isAuthenticated) return;
       let recents = JSON.parse(localStorage.getItem('recent_lists') || '[]');
       recents = recents.filter(item => item.id !== id);
       recents.unshift({ id, title: title || "Untitled List" });
@@ -90,7 +106,7 @@
       });
     }
 
-    // 2. Fetch list data and tasks
+    // 3. Fetch list data and tasks
     async function loadTasks() {
       try {
         const res = await fetch(`/api/lists/${listId}`);
@@ -101,19 +117,21 @@
         saveRecentList(listId, data.title);
 
         taskContainer.innerHTML = '';
+        loadedTasks = data.tasks;
         data.tasks.forEach(task => renderTask(task));
       } catch (err) {
         console.error(err);
       }
     }
 
-    // 3. Render a single task DOM element
+    // 4. Render a single task DOM element
     function renderTask(task) {
       const taskDiv = document.createElement('div');
       taskDiv.className = `task-item ${task.is_completed ? 'completed' : ''}`;
       taskDiv.dataset.id = task.id;
 
-      const dueHtml = task.due_date ? `<span class="due-badge">📅 ${task.due_date}</span>` : '';
+      const dueFormatted = formatDateTime(task.due_date);
+      const dueHtml = dueFormatted ? `<span class="due-badge">🕒 ${dueFormatted}</span>` : '';
       const priorityHtml = `<span class="badge badge-${task.priority}">${task.priority}</span>`;
 
       taskDiv.innerHTML = `
@@ -127,7 +145,7 @@
       taskContainer.appendChild(taskDiv);
     }
 
-    // 4. Initialize SortableJS Drag and Drop
+    // 5. Initialize SortableJS Drag and Drop
     new Sortable(taskContainer, {
       handle: '.drag-handle',
       animation: 150,
@@ -141,7 +159,7 @@
       }
     });
 
-    // 5. Title Inline Edit Sync
+    // 6. Title Inline Edit Sync
     titleElem.addEventListener('blur', async () => {
       const newTitle = titleElem.textContent.trim() || 'Untitled List';
       await fetch(`/api/lists/${listId}`, {
@@ -152,32 +170,31 @@
       saveRecentList(listId, newTitle);
     });
 
-     taskForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const desc = document.getElementById('task-input').value.trim();
-  const priority = document.getElementById('task-priority').value;
-  const due = document.getElementById('task-due-date').value;
-  if (!desc) return;
+    // 7. Add Task Form Handler
+    taskForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const desc = document.getElementById('task-input').value.trim();
+      const priority = document.getElementById('task-priority').value;
+      const due = document.getElementById('task-due-date').value;
+      if (!desc) return;
 
-  const res = await fetch(`/api/lists/${listId}/tasks`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ description: desc, priority: priority, due_date: due })
-  });
+      const res = await fetch(`/api/lists/${listId}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: desc, priority: priority, due_date: due })
+      });
 
-  if (res.ok) {
-    const newTask = await res.json();
-    renderTask(newTask);
+      if (res.ok) {
+        const newTask = await res.json();
+        loadedTasks.push(newTask);
+        renderTask(newTask);
 
-    // 👇 ADD THIS LINE HERE:
-    showNotification("New Task Added", newTask.description);
+        document.getElementById('task-input').value = '';
+        document.getElementById('task-due-date').value = '';
+      }
+    });
 
-    document.getElementById('task-input').value = '';
-    document.getElementById('task-due-date').value = '';
-  }
-});
-
-    // 7. Toggle Completion
+    // 8. Toggle Completion
     async function toggleTask(taskId, isCompleted) {
       const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'PATCH',
@@ -187,27 +204,31 @@
       if (res.ok) {
         const taskElem = document.querySelector(`[data-id="${taskId}"]`);
         if (taskElem) taskElem.classList.toggle('completed', isCompleted);
+        const t = loadedTasks.find(item => item.id === taskId);
+        if (t) t.is_completed = isCompleted;
       }
     }
 
-    // 8. Delete Task
+    // 9. Delete Task
     async function deleteTask(taskId) {
       const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
       if (res.ok) {
         const taskElem = document.querySelector(`[data-id="${taskId}"]`);
         if (taskElem) taskElem.remove();
+        loadedTasks = loadedTasks.filter(item => item.id !== taskId);
       }
     }
 
-    // 9. Clear All Completed Tasks
+    // 10. Clear All Completed Tasks
     async function clearCompleted() {
       const res = await fetch(`/api/lists/${listId}/completed`, { method: 'DELETE' });
       if (res.ok) {
         document.querySelectorAll('.task-item.completed').forEach(el => el.remove());
+        loadedTasks = loadedTasks.filter(item => !item.is_completed);
       }
     }
 
-    // 10. Export to Plain Text (.txt)
+    // 11. Export to Plain Text (.txt)
     function exportList() {
       const items = Array.from(taskContainer.children).map(item => {
         const isDone = item.querySelector('input[type="checkbox"]').checked ? '[x]' : '[ ]';
@@ -222,70 +243,52 @@
       a.click();
     }
 
+    // 12. Desktop Notification Support
+    async function requestNotificationPermission() {
+      if (!("Notification" in window)) {
+        alert("This browser does not support desktop notifications.");
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+      const btn = document.getElementById('notify-btn');
+
+      if (permission === "granted") {
+        btn.textContent = "🔔 Alerts Enabled";
+        btn.disabled = true;
+        showNotification("Notifications Active", "You'll now receive alerts for upcoming tasks!");
+      } else {
+        alert("Notification permission denied. Enable it in browser site settings.");
+      }
+    }
+
+    function showNotification(title, body) {
+      if (Notification.permission === "granted") {
+        new Notification(title, { body: body });
+      }
+    }
+
+    // 13. Accurate Due Date Minute Alert Checker (Runs every 60s)
+    setInterval(() => {
+      if (Notification.permission !== "granted") return;
+
+      const now = new Date().getTime();
+      loadedTasks.forEach(task => {
+        if (!task.is_completed && task.due_date) {
+          const taskTime = new Date(task.due_date).getTime();
+          const diffMinutes = Math.round((taskTime - now) / (1000 * 60));
+
+          // Trigger alert if task is due within the next 15 minutes
+          if (diffMinutes > 0 && diffMinutes <= 15) {
+            showNotification("Task Due Soon!", `"${task.description}" is due in ${diffMinutes} minutes.`);
+          }
+        }
+      });
+    }, 60000);
+
+    // Initial load
     populateRecentMenu();
     loadTasks();
-
-
-    // 1. Request Permission from Chrome
-async function requestNotificationPermission() {
-  if (!("Notification" in window)) {
-    alert("This browser does not support desktop notifications.");
-    return;
-  }
-
-  const permission = await Notification.requestPermission();
-  const btn = document.getElementById('notify-btn');
-
-  if (permission === "granted") {
-    btn.textContent = "🔔 Alerts Enabled";
-    btn.disabled = true;
-    showNotification("Notifications Active", "You'll now receive alerts for your tasks!");
-  } else {
-    alert("Notification permission denied. Enable it in Chrome site settings.");
-  }
-}
-
-// 2. Helper to display a desktop notification
-function showNotification(title, body) {
-  if (Notification.permission === "granted") {
-    new Notification(title, {
-      body: body,
-      icon: "https://cdn-icons-png.flaticon.com/512/906/906334.png" // Optional task icon
-    });
-  }
-}
-
-// 3. Check for due tasks every 60 seconds
-setInterval(() => {
-  if (Notification.permission !== "granted") return;
-
-  const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
-  const tasks = document.querySelectorAll('.task-item:not(.completed)');
-
-  tasks.forEach(task => {
-    const dueBadge = task.querySelector('.due-badge');
-    const taskName = task.querySelector('span[style*="flex-grow"]').textContent;
-
-    if (dueBadge && dueBadge.textContent.includes(today)) {
-      showNotification("Task Due Today!", `Don't forget: ${taskName}`);
-    }
-  });
-}, 60000); // Checks every minute
-
-    // Check if user is logged in using Jinja2
-const isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
-
-function saveRecentList(id, title) {
-  // Only store recent lists in localStorage if the user is a guest
-  if (isAuthenticated) return;
-
-  let recents = JSON.parse(localStorage.getItem('recent_lists') || '[]');
-  recents = recents.filter(item => item.id !== id);
-  recents.unshift({ id, title: title || "Untitled List" });
-  if (recents.length > 8) recents.pop();
-  localStorage.setItem('recent_lists', JSON.stringify(recents));
-  populateRecentMenu();
-}
   </script>
 </body>
 </html>
